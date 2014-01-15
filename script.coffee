@@ -1,10 +1,5 @@
 @app = angular.module "bluffApp", ["firebase"]
 
-@app.factory 'Cards', ->
-  ["1 club",
-    "2 club"
-  ]
-
 @app.filter 'cardToName', ->
   (card) ->
     suit = switch card.suit
@@ -36,18 +31,35 @@
   cardsRef = new Firebase('https://bluff.firebaseio.com/cards')
   metaRef = new Firebase('https://bluff.firebaseio.com/meta')
   roundRef = new Firebase('https://bluff.firebaseio.com/round')
+  @loading = true
   @cards = $firebase cardsRef
   @meta = $firebase metaRef
   @round = $firebase roundRef
   @playerName = "Gerald"
   @player = 0
   @selectedCards = []
-  console.log(@meta)
+
+  @cards.$on 'loaded', =>
+    # bug in firebase where item is not loaded
+    @loading = false
+
+  $scope.$watch 'game.playerName', =>
+    return unless @meta.players
+    @player = @meta.players.indexOf @playerName
 
   $scope.selectCard = (card) =>
     @selectedCards.push(card)
 
-  $scope.playCards = =>
+  @pass = =>
+    @meta.curTurn = (@meta.curTurn + 1) % @meta.numPlayers
+    if @meta.curTurn == @round.moves[@round.moves.length - 1].player
+      @round.moves = []
+      delete @round.numeral
+      @round.$save()
+    @meta.$save()
+    @checkWin()
+
+  @playCards = =>
     move =
       player: @player
       count: @selectedCount
@@ -63,6 +75,7 @@
         if selectedCard.numeral == card.numeral and selectedCard.suit == card.suit
           return false
       true
+    @cards[@player] = @cards[@player] || []
 
     @selectedCards = []
     @meta.curTurn = (@meta.curTurn + 1) % @meta.numPlayers
@@ -70,16 +83,51 @@
     @round.$save()
     @cards.$save()
     @meta.$save()
+    @checkWin()
 
-  $scope.callBluff = (moves) =>
-    moves.$add
-      user: "Gerald"
-      numeral: "Ace"
-      count: 2
+  @checkWin = =>
+    if @round.moves.length == 0
+      recentMove = null
+    else
+      recentMove = @round.moves[@round.moves.length - 1]
+    for player in [0...@meta.numPlayers]
+      if not @cards[player]? and (recentMove == null or recentMove.player != player)
+        console.log "#{player} wins!"
+        @meta.gameState =
+          type: 'WIN'
+          player: player
+
+    @meta.$save()
+        
+  @clickAllCards = =>
+    @selectedCards = angular.copy @cards[@player]
+
+  @giveCards = (round, player) =>
+    for move in round.moves
+      for card in move.cards
+        @cards[player].push(card)
+
+
+  @callBluff = =>
+    recentMove = @round.moves[@round.moves.length - 1]
+    wrongCards = recentMove.cards.filter (card) =>
+      card.numeral != @round.numeral
+
+    if wrongCards.length > 0 or recentMove.count != recentMove.cards.length
+      @giveCards @round, recentMove.player
+    else
+      @giveCards @round, @player
+      @meta.curTurn = recentMove.player
+
+    @round.moves = []
+    delete @round.numeral
+    @round.$save()
+    @meta.$save()
+    @checkWin()
   
   # round:
   #   numeral: 5 // if numeral has not been set, then it is first move of set
-  #   moves: [ 
+  #   moves: [        // the most recent moves are at end of list
   #     player: 0
   #     count: 3
   #     cards: [
@@ -100,6 +148,14 @@
   #     ]
   #   ]
   # meta:
+  #   gameState:
+  #     type: 'WIN'
+  #     player: 0
+  #     // OR 
+  #     type: 'LOBBY'
+  #     // OR
+  #     type: 'PLAYING'
+  #
   #   numPlayers: numPlayers
   #   players: [
   #     "Gerald"
@@ -140,13 +196,15 @@
         "Andrew"
       ]
       curTurn: 0
+      gameState:
+        type: 'PLAYING'
 
     @round.moves = []
     delete @round.numeral
+    @round.$save()
+
     @cards.$set cards
     @meta.$set meta
-    @round.$save()
-    console.log(@round)
   return this
 
 @app.directive "message", ->
