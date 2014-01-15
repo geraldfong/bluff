@@ -1,0 +1,32 @@
+html
+  head
+  body
+    div(ng-app="bluffApp")
+      div(ng-controller="GameCtrl as game") 
+        h3 Board
+        div Current Numeral: {{game.round.numeral}}
+        div Num Cards on Board: {{game.round.moves | cardsInCenter}} 
+        h3 Your Hand
+        span.card(ng-click='selectCard(card)', ng-repeat="card in game.cards[game.player]") {{card | cardToName}} |  
+        div {{game.meta.curTurn | turnText: game.playerName:game.meta.players}}
+        span Player Name
+        input(type='text', ng-model='game.playerName')
+        br
+        button(ng-click='callBluff(game.moves)') Call Bluff
+        br
+        select(ng-model='game.selectedNumeral', ng-options='i for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]')
+        select(ng-model='game.selectedCount', ng-options='i for i in [1, 2, 3, 4]')
+        button(ng-click='playCards(game.moves)') Play Cards
+
+        h2 Restart Game
+        | Num Players 
+        select(ng-model='game.numPlayers', ng-options='i for i in [2, 3, 4, 5, 6]')
+
+        button(ng-click='restartGame(game.numPlayers)') Restart
+
+        select(ng-model='game.player', ng-options='i for i in [0, 1, 2]')
+      
+  script(src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.8/angular.min.js")
+  script(src="https://cdn.firebase.com/v0/firebase.js")
+  script(src="https://cdn.firebase.com/libs/angularfire/0.5.0/angularfire.min.js" type="text/javascript")
+  script(src="script.js")
