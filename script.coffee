@@ -27,24 +27,23 @@
     sum
       
 @app.controller "GameCtrl", ($scope, $firebase) ->
-  ref = new Firebase('https://bluff.firebaseio.com/moves')
-  cardsRef = new Firebase('https://bluff.firebaseio.com/cards')
-  metaRef = new Firebase('https://bluff.firebaseio.com/meta')
-  roundRef = new Firebase('https://bluff.firebaseio.com/round')
+  @fb = $firebase new Firebase 'https://bluff.firebaseio.com'
   @loading = true
-  @cards = $firebase cardsRef
-  @meta = $firebase metaRef
-  @round = $firebase roundRef
   @playerName = "Gerald"
   @player = 0
   @selectedCards = []
-
-  @cards.$on 'loaded', =>
-    # bug in firebase where item is not loaded
-    @loading = false
+  @fb.$on 'loaded', =>
+    # Bug in fb where 'loaded' triggers but fb not loaded
+    # make another 10 ms timeout to make sure content loaded
+    setTimeout =>
+      @cards = @fb.$child 'cards'
+      @meta = @fb.$child 'meta'
+      @round = @fb.$child 'round'
+      @loading = false
+    , 10
 
   $scope.$watch 'game.playerName', =>
-    return unless @meta.players
+    return unless @meta && @meta.players
     @player = @meta.players.indexOf @playerName
 
   $scope.selectCard = (card) =>
