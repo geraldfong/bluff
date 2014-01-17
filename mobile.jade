@@ -1,0 +1,50 @@
+html
+  head
+    link(rel='stylesheet', href='/style.css')
+  body(ng-app='bluffApp')
+    div(ng-controller='GameCtrl as game')
+      .loaded(ng-if="game.loading") loading
+      .loaded(ng-if="!game.loading || !game.player")
+        .players
+          .exit
+          .playerWrapper(ng-repeat='p in game.otherPlayers()')
+            img.face(ng-src='{{"imgs/p" + p + ".png"}}')
+            .cardIconWrapper
+              .cardIcon
+            .cardCount {{game.cards[p].length}}
+            .speechBubble(ng-if='game.meta.lastMove[p].type != "NONE" || game.meta.curTurn == p', ng-class='{thinking: game.meta.curTurn == p}')
+              .isThinking(ng-if='game.meta.curTurn == p')
+                .thinkingText ...
+              .notThinking(ng-if='game.meta.curTurn != p')
+                .speechBubbleCards(ng-if='game.meta.lastMove[p].type == "PLAY"')
+                  .cardIcon(ng-repeat='i in game.meta.lastMove[p].count | toRange')
+                .lastMove(ng-if='game.meta.lastMove[p].type != "PLAY"') {{game.meta.lastMove[p].type | lastMovePrettify}}
+
+        .table
+          .pot
+            .card(ng-repeat='i in game.round | potCards')
+
+        .hand
+          .msgBox
+            .msg {{game.msg}}
+          .cardsWrapper
+            .cards
+              .cardWrapper(ng-repeat='numeral in game.cards[game.player] | cardNumerals')
+                .card(ng-class='{selected: game.cardSelected[numeral] > $index, red: suit == 1 || suit == 2, card1: $index == 1, card2: $index == 2, card3: $index == 3}',
+                  ng-repeat='suit in game.cards[game.player] | suitsWithNumeral:numeral', ng-click='game.incrementCardSelected(numeral)')
+                    .topLeft {{numeral | prettyNumeral}}
+                    .suit {{suit | prettySuit}}
+                    .bottomRight {{numeral | prettyNumeral}}
+        .actionBar
+          .actionMenu(ng-if="!game.pressedPlay")
+            button.call(ng-click="game.callBluff(game.moves)") Call
+            button.pass(ng-click='game.pass()') Pass
+            button.play(ng-click="game.pressedPlay=true") Play
+          .playMenu(ng-if="game.pressedPlay")
+            select(ng-model='game.selectedCount', ng-options='i for i in [1, 2, 3, 4]')
+            select(ng-model='game.selectedNumeral', ng-options='i | prettyNumeral for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]')
+            button.go(ng-click='game.playCards(game.moves)') Go
+  script(src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.8/angular.min.js")
+  script(src="https://cdn.firebase.com/v0/firebase.js")
+  script(src="https://cdn.firebase.com/libs/angularfire/0.5.0/angularfire.min.js" type="text/javascript")
+  script(src="script.js")

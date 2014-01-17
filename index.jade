@@ -9,7 +9,7 @@ html
           div Current Numeral: {{game.round.numeral}}
           div Num Cards on Board: {{game.round.moves | cardsInCenter}} 
           h3 Your Hand
-          span.card(ng-click='selectCard(card)', ng-repeat="card in game.cards[game.player] | orderBy:'numeral'") {{card | cardToName}} |  
+          span.card(ng-click='game.selectCard(card)', ng-repeat="card in game.cards[game.player] | orderBy:'numeral'") {{card | cardToName}} |  
           div {{game.meta.curTurn | turnText: game.playerName:game.meta.players}}
           span Player Name
           input(type='text', ng-model='game.playerName')
@@ -30,7 +30,7 @@ html
           | Num Players 
           select(ng-model='game.numPlayers', ng-options='i for i in [2, 3, 4, 5, 6]')
 
-          button(ng-click='restartGame(game.numPlayers)') Restart
+          button(ng-click='game.restartGame(game.numPlayers)') Restart
 
           select(ng-model='game.player', ng-options='i for i in [0, 1, 2]')
       

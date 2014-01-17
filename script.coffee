@@ -21,44 +21,104 @@
 
 @app.filter 'cardsInCenter', ->
   (moves) ->
-    return unless moves
+
+# Returns the numerals contained in a list of cards
+@app.filter 'cardNumerals', ->
+  (cards) ->
+    return unless cards
+    numerals = {}
+    for card in cards
+      numerals[card.numeral] = true
+    (parseInt numeral for numeral in Object.keys numerals)
+
+# Returns just the suits with a given numeral in a hand of cards
+@app.filter 'suitsWithNumeral', ->
+  (cards, numeral) ->
+    (card.suit for card in cards when card.numeral == numeral)
+
+@app.filter 'prettyNumeral', ->
+  (numeral) ->
+    if numeral == 1
+      'A'
+    else if numeral == 11
+      'J'
+    else if numeral == 12
+      'Q'
+    else if numeral == 13
+      'K'
+    else
+      numeral
+
+@app.filter 'prettySuit', ->
+  (suit) ->
+    ['♣', '♦', '♥', '♠'][suit]
+
+@app.filter 'potCards', ->
+  (round) ->
+    return if !round or !round.moves
     sum = 0
-    sum += move.cards.length for move in moves
-    sum
-      
-@app.controller "GameCtrl", ($scope, $firebase) ->
+    sum += move.cards.length for move in round.moves
+    [0...sum]
+
+@app.filter 'lastMovePrettify', ->
+  (moveType) ->
+    if moveType == 'BLUFF'
+      'Bluff!'
+    else if moveType == 'PASS'
+      'Pass!'
+
+@app.filter 'toRange', ->
+  (num) ->
+    [0...num]
+
+@app.controller "GameCtrl", ($scope, $firebase, $timeout) ->
   @fb = $firebase new Firebase 'https://bluff.firebaseio.com'
   @loading = true
   @playerName = "Gerald"
-  @player = 0
+  @player = prompt "Nick type 1, Andrew type 2 plz :)"
   @selectedCards = []
+  @pressedPlay = false
+
   @fb.$on 'loaded', =>
     # Bug in fb where 'loaded' triggers but fb not loaded
     # make another 10 ms timeout to make sure content loaded
-    setTimeout =>
+    $timeout =>
       @cards = @fb.$child 'cards'
       @meta = @fb.$child 'meta'
       @round = @fb.$child 'round'
       @loading = false
-    , 10
+    , 100
+
+  @updateTurn = =>
+    return unless @fb && @fb.meta && @fb.meta.numPlayers
+    @msg = if @fb.meta.curTurn == @player then 'Your move' else ''
+
+
+  $scope.$watch 'game.fb.meta', @updateTurn
 
   $scope.$watch 'game.playerName', =>
     return unless @meta && @meta.players
     @player = @meta.players.indexOf @playerName
 
-  $scope.selectCard = (card) =>
+  @selectCard = (card) =>
     @selectedCards.push(card)
 
   @pass = =>
     @meta.curTurn = (@meta.curTurn + 1) % @meta.numPlayers
+    @meta.lastMove[@player] =
+      type: 'PASS'
     if @meta.curTurn == @round.moves[@round.moves.length - 1].player
       @round.moves = []
       delete @round.numeral
       @round.$save()
+      @resetLastMoves()
     @meta.$save()
     @checkWin()
 
   @playCards = =>
+    @pressedPlay = false
+    @calcSelectedCards()
+    console.log @selectedCards
     move =
       player: @player
       count: @selectedCount
@@ -78,6 +138,9 @@
 
     @selectedCards = []
     @meta.curTurn = (@meta.curTurn + 1) % @meta.numPlayers
+    @meta.lastMove[@player] =
+      type: 'PLAY'
+      count: @selectedCount
 
     @round.$save()
     @cards.$save()
@@ -113,15 +176,22 @@
       card.numeral != @round.numeral
 
     if wrongCards.length > 0 or recentMove.count != recentMove.cards.length
+      console.log "Good call"
       @giveCards @round, recentMove.player
     else
+      console.log "Bad call"
       @giveCards @round, @player
       @meta.curTurn = recentMove.player
+
+    @meta.lastMove[@player] =
+      type: 'BLUFF'
 
     @round.moves = []
     delete @round.numeral
     @round.$save()
     @meta.$save()
+    @cards.$save()
+    @resetLastMoves()
     @checkWin()
   
   # round:
@@ -162,6 +232,15 @@
   #     "Andrew"
   #   ]
   #   curTurn: 0
+  #   lastMove:
+  #     0:
+  #       type: 'PLAY'
+  #       count: 2
+  #     1:
+  #       type: 'PASS'
+  #     2:
+  #       type: 'CALL' # or 'PASS' or 'NONE'
+  #
   # cards:
   #   0: [
   #     numeral: 2
@@ -178,7 +257,7 @@
 
   # numeral - Card number from 1 to 13
   # suit - Suit value from 0 to 3, club, diamond, heart, spade respectively
-  $scope.restartGame = (numPlayers) =>
+  @restartGame = (numPlayers) =>
     deck = ({numeral: i % 13 + 1, suit: Math.floor i / 13} for i in [0...52])
     for i in [0...52]
       randI = Math.floor(Math.random() * 52)
@@ -197,15 +276,50 @@
       curTurn: 0
       gameState:
         type: 'PLAYING'
+      lastMove:
+        0:
+          type: 'NONE'
+        1:
+          type: 'NONE'
+        2:
+          type: 'NONE'
 
-    @round.moves = []
-    delete @round.numeral
-    @round.$save()
-
+    @fb.round = {}
+    @fb.$save()
     @cards.$set cards
     @meta.$set meta
-  return this
 
-@app.directive "message", ->
-  restrict: 'E'
-  template: '<div>Div contents go here</div>'
+  @resetLastMoves = =>
+    @meta.lastMove =
+      0:
+        type: 'NONE'
+      1:
+        type: 'NONE'
+      2:
+        type: 'NONE'
+    @meta.$save()
+
+  @otherPlayers = =>
+    [(@player + 1) % 3, (@player + 2) % 3]
+
+  # UI Helper Methods below
+  #
+  
+  @countNumeral = (numeral) =>
+    x = 0
+    x++ for card in @cards[@player] when card.numeral == numeral
+    x
+  
+  @cardSelected = {}
+
+  @calcSelectedCards = =>
+    for card in @cards[@player]
+      if @cardSelected[card.numeral] > 0
+        @selectedCards.push card
+        @cardSelected[card.numeral] -= 1
+
+  @incrementCardSelected = (numeral) =>
+    @cardSelected[numeral] ||= 0
+    @cardSelected[numeral] = (@cardSelected[numeral] + 1) % (@countNumeral(numeral) + 1)
+
+  return this
